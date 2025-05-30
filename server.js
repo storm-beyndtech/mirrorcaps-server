@@ -1,8 +1,9 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import mongoose from "mongoose";
 import http from "http";
 import cors from "cors";
-import dotenv from "dotenv";
 import { verifyTransporter } from "./utils/emailConfig.js";
 import usersRoutes from "./routes/users.js";
 import transactionsRoutes from "./routes/transactions.js";
@@ -13,8 +14,6 @@ import traderRoutes from "./routes/traders.js";
 import utilsRoutes from "./routes/utils.js";
 import kycsRoutes from "./routes/kycs.js";
 import rateLimit from "express-rate-limit";
-
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
@@ -37,11 +36,29 @@ mongoose
 	.then(() => console.log("Connected to MongoDB..."))
 	.catch((e) => console.error("Error connecting to MongoDB:", e));
 
-// CORS middleware
-app.use((req, res, next) => {
-	res.header("Access-Control-Allow-Origin", "*");
-	next();
-});
+import cors from "cors";
+
+const allowedOrigins = [
+	"https://mirrorcaps.com",
+	"https://www.mirrorcaps.com",
+	"https://mirrorcaps-client.vercel.app/",
+	"http://localhost:5173",
+];
+
+const corsOptions = {
+	origin: (origin, callback) => {
+		if (!origin || allowedOrigins.includes(origin)) {
+			callback(null, true);
+		} else {
+			callback(new Error("Not allowed by CORS"));
+		}
+	},
+	methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+	credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Preflight
 
 // Create a rate limiter for POST requests only
 const postLimiter = rateLimit({
