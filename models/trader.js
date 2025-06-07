@@ -6,9 +6,20 @@ const traderSchema = new mongoose.Schema({
 		required: [true, "Trader name is required"],
 		trim: true,
 	},
+	username: {
+		type: String,
+		required: [true, "username is required"],
+		trim: true,
+	},
+	totalTrades: {
+		type: String,
+		required: [true, "Total trades is required"],
+		trim: true,
+	},
 	profileImage: {
 		type: String,
-		default: "default-trader.png",
+		default:
+			"https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png?20150327203541",
 	},
 	bio: {
 		type: String,

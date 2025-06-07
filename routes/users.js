@@ -96,7 +96,6 @@ router.get("/reset-password/:email", async (req, res) => {
 	}
 });
 
-// login user
 router.post("/login", async (req, res) => {
 	const { email, username, password } = req.body;
 	const { error } = validateLogin(req.body);
@@ -106,15 +105,20 @@ router.post("/login", async (req, res) => {
 		const user = await User.findOne({
 			$or: [{ email }, { username }],
 		});
-		if (!user) return res.status(400).send({ message: "user not found" });
+		if (!user) return res.status(400).send({ message: "User not found" });
 
-		const validatePassword = bcrypt.compare(password, user.password);
-		if (!validatePassword) return res.status(400).send({ message: "Invalid password" });
+		// Check if the user has a password set (i.e., not a Google account)
+		if (!user.password) {
+			return res.status(400).send({ message: "This user signed up via Google. Use Google login." });
+		}
+
+		const isMatch = await bcrypt.compare(password, user.password);
+		if (!isMatch) return res.status(400).send({ message: "Invalid password" });
 
 		res.send({ message: "success", user });
-	} catch (error) {
-		for (i in e.errors) res.status(500).send({ message: e.errors[i].message });
-		console.log(e.errors[0].message);
+	} catch (e) {
+		console.error(e);
+		res.status(500).send({ message: "Internal server error" });
 	}
 });
 

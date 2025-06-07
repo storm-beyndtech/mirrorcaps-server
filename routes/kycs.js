@@ -1,6 +1,6 @@
 import express from "express";
 import { User } from "../models/user.js";
-import { Kyc, validateKyc } from "../models/kyc.js";
+import { Kyc } from "../models/kyc.js";
 
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
@@ -52,9 +52,6 @@ router.get("/:id", async (req, res) => {
 //Create KYC
 router.post("/", upload.fields([{ name: "documentFront" }, { name: "documentBack" }]), async (req, res) => {
 	const { name, email, documentNumber, documentExpDate } = req.body;
-	const { error } = validateKyc({ name, email, documentNumber, documentExpDate });
-
-	if (error) return res.status(400).send({ message: error.details[0].message });
 
 	// Prevent duplicates
 	const existingKyc = await Kyc.findOne({ $or: [{ email }, { documentNumber }] });
