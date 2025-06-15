@@ -122,7 +122,7 @@ export const userSchema = new mongoose.Schema({
 	},
 	withdrawalLimit: {
 		type: Number,
-		default: 1000,
+		default: 100000,
 	},
 	minWithdrawal: {
 		type: Number,
