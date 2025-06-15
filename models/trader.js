@@ -12,9 +12,8 @@ const traderSchema = new mongoose.Schema({
 		trim: true,
 	},
 	totalTrades: {
-		type: String,
-		required: [true, "Total trades is required"],
-		trim: true,
+		type: Number,
+		default: 0,
 	},
 	profileImage: {
 		type: String,

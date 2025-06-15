@@ -184,6 +184,38 @@ export async function depositMail(fullName, amount, date, email) {
 	}
 }
 
+export async function pendingDepositMail(fullName, amount, date, email) {
+	try {
+		let bodyContent = `
+      <td style="padding: 20px; line-height: 1.8;">
+        <p>Dear ${fullName},</p>
+        <p>
+          We've received your deposit request of <strong>${amount}</strong> on ${date}. 
+          It is currently being reviewed and will be processed shortly.
+        </p>
+        <p>
+          You'll receive a confirmation email once the deposit is approved.
+          If you have any questions, feel free to contact us at support@mirrorcaps.com.
+        </p>
+        <p>Thank you for choosing Mirrorcaps.</p>
+        <p>The Mirrorcaps Team</p>
+      </td>
+    `;
+
+		let mailOptions = {
+			from: `Mirrorcaps ${process.env.SMTP_USER}`,
+			to: email,
+			subject: "Deposit Pending",
+			html: emailTemplate(bodyContent),
+		};
+
+		return await sendMailWithRetry(mailOptions);
+	} catch (error) {
+		return { error: error instanceof Error && error.message };
+	}
+}
+
+
 // withdrawal mail
 export async function withdrawalMail(fullName, amount, date, email) {
 	try {
@@ -216,6 +248,38 @@ export async function withdrawalMail(fullName, amount, date, email) {
 		return { error: error instanceof Error && error.message };
 	}
 }
+
+export async function pendingWithdrawalMail(fullName, amount, date, email) {
+	try {
+		let bodyContent = `
+      <td style="padding: 20px; line-height: 1.8;">
+        <p>Dear ${fullName},</p>
+        <p>
+          We've received your withdrawal request of <strong>${amount}</strong> on ${date}. 
+          It is currently under review and will be processed soon.
+        </p>
+        <p>
+          We'll notify you once the funds have been sent. If you have questions, 
+          our support team is here to help: support@mirrorcaps.com.
+        </p>
+        <p>Thank you for using Mirrorcaps.</p>
+        <p>The Mirrorcaps Team</p>
+      </td>
+    `;
+
+		let mailOptions = {
+			from: `Mirrorcaps ${process.env.SMTP_USER}`,
+			to: email,
+			subject: "Withdrawal Pending",
+			html: emailTemplate(bodyContent),
+		};
+
+		return await sendMailWithRetry(mailOptions);
+	} catch (error) {
+		return { error: error instanceof Error && error.message };
+	}
+}
+
 
 // withdrawal mail
 export async function multiMails(emails, subject, message) {
@@ -276,5 +340,71 @@ export async function sendContactUsMail({ name, email, subject, message }) {
 	} catch (error) {
 		console.error("Error sending contact us mail:", error);
 		return { error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+
+export async function kycPendingMail(fullName, email) {
+	try {
+		let bodyContent = `
+      <td style="padding: 20px; line-height: 1.8;">
+        <p>Dear ${fullName},</p>
+        <p>
+          Your KYC documents have been submitted successfully and are currently under review.
+        </p>
+        <p>
+          We typically review submissions within 24-48 hours. You will be notified as soon 
+          as your KYC is approved or if any additional documents are required.
+        </p>
+        <p>
+          If you need assistance, reach us at support@mirrorcaps.com.
+        </p>
+        <p>Thank you for helping us keep Mirrorcaps secure.</p>
+        <p>The Mirrorcaps Team</p>
+      </td>
+    `;
+
+		let mailOptions = {
+			from: `Mirrorcaps ${process.env.SMTP_USER}`,
+			to: email,
+			subject: "KYC Verification Pending",
+			html: emailTemplate(bodyContent),
+		};
+
+		return await sendMailWithRetry(mailOptions);
+	} catch (error) {
+		return { error: error instanceof Error && error.message };
+	}
+}
+
+export async function kycApprovedMail(fullName, email) {
+	try {
+		let bodyContent = `
+      <td style="padding: 20px; line-height: 1.8;">
+        <p>Dear ${fullName},</p>
+        <p>
+          Great news! Your KYC verification has been approved.
+        </p>
+        <p>
+          You now have full access to all platform features including deposits, withdrawals, and trading.
+        </p>
+        <p>
+          If you have any questions, our support team is here for you at support@mirrorcaps.com.
+        </p>
+        <p>Welcome aboard, and thank you for verifying your identity.</p>
+        <p>The Mirrorcaps Team</p>
+      </td>
+    `;
+
+		let mailOptions = {
+			from: `Mirrorcaps ${process.env.SMTP_USER}`,
+			to: email,
+			subject: "KYC Approved!",
+			html: emailTemplate(bodyContent),
+		};
+
+		return await sendMailWithRetry(mailOptions);
+	} catch (error) {
+		return { error: error instanceof Error && error.message };
 	}
 }

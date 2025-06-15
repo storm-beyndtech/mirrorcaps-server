@@ -5,6 +5,7 @@ import { Kyc } from "../models/kyc.js";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
+import { kycApprovedMail, kycPendingMail } from "../utils/mailer.js";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -73,6 +74,10 @@ router.post("/", upload.fields([{ name: "documentFront" }, { name: "documentBack
 
 	try {
 		const result = await newKyc.save();
+
+		const emailData = await kycPendingMail(name, email);
+		if (emailData.error) return res.status(400).send({ message: emailData.error });
+
 		res.send(result);
 	} catch (e) {
 		console.error(e);
@@ -103,6 +108,9 @@ router.put("/", async (req, res) => {
 
 		await Promise.all([user.save(), userKyc.save()]);
 
+		const emailData = await kycApprovedMail(user.fullName, email);
+    if (emailData.error) return res.status(400).send({ message: emailData.error });
+    
 		res.send({ message: "KYC approved and user updated successfully." });
 	} catch (e) {
 		console.error(e);

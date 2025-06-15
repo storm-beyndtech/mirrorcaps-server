@@ -120,13 +120,24 @@ export const userSchema = new mongoose.Schema({
 		type: Boolean,
 		default: false,
 	},
+	withdrawalLimit: {
+		type: Number,
+		default: 1000,
+	},
+	minWithdrawal: {
+		type: Number,
+		default: 10,
+	},
+	withdrawalStatus: {
+		type: Boolean,
+		default: true,
+	},
 	createdAt: {
 		type: Date,
 		default: Date.now,
 	},
 	rank: {
 		type: String,
-		maxLength: 50,
 		default: "welcome",
 	},
 	traderId: {

@@ -142,9 +142,35 @@ router.put("/:id", async (req, res) => {
 		const users = await User.find({ deposit: { $gt: 0 } }).session(session);
 
 		for (const user of users) {
+			// Check if user has a trader assigned
+			if (!user.traderId) {
+				console.log(`User ${user._id} has no trader assigned - skipping interest disbursement`);
+				continue;
+			}
+
+			// Get the trader's specialization
+			const trader = await Trader.findById(user.traderId).session(session);
+			if (!trader) {
+				console.log(
+					`Trader ${user.traderId} not found for user ${user._id} - skipping interest disbursement`,
+				);
+				continue;
+			}
+
+			// Check if trader's specialization matches trade category
+			if (trader.specialization !== trade.tradeData.category) {
+				console.log(
+					`Trader specialization (${trader.specialization}) doesn't match trade category (${trade.tradeData.category}) for user ${user._id} - skipping interest disbursement`,
+				);
+				continue;
+			}
+
+			// Calculate and add interest if all checks pass
 			const calculatedInterest = trade.tradeData.interest * user.deposit;
 			user.interest += calculatedInterest;
 			await user.save({ session });
+
+			console.log(`Interest disbursed to user ${user._id}: ${calculatedInterest}`);
 		}
 
 		// Update trade status
