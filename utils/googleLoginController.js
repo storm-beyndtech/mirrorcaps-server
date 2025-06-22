@@ -13,7 +13,9 @@ export const googleLogin = async (req, res) => {
 		});
 
 		const payload = ticket.getPayload();
-		const { email, name, picture } = payload;
+		const { email, picture } = payload;
+		const raw = email.split("@")[0];
+		const username = raw.replace(/[^a-zA-Z0-9]/g, "");
 
 		let user = await User.findOne({ email });
 
@@ -26,8 +28,8 @@ export const googleLogin = async (req, res) => {
 		if (!user) {
 			user = new User({
 				email,
+				username,
 				profileImage: picture,
-				username: name,
 				isGoogleUser: true,
 			});
 			await user.save();
