@@ -152,14 +152,14 @@ export async function alertAdmin(email, amount, date, type) {
 }
 
 // deposit mail
-export async function depositMail(fullName, amount, date, email) {
+export async function depositMail(fullName, amount, date, email, rejected = false) {
 	try {
 		let bodyContent = `
       <td style="padding: 20px; line-height: 1.8;">
         <p>Dear ${fullName}</p>
         <p>
           Your deposit of <strong>${amount}</strong>, ${date}, was 
-          successful! Your can now use your funds to trade on Mirrorcaps.
+          ${rejected ? "unsuccessful" : "successful"}! ${rejected ? "Please try again later." : "You can now use your funds to trade on Mirrorcaps."}
         </p>
         <p>
           If you have questions or need assistance, reach out 
@@ -217,14 +217,14 @@ export async function pendingDepositMail(fullName, amount, date, email) {
 
 
 // withdrawal mail
-export async function withdrawalMail(fullName, amount, date, email) {
+export async function withdrawalMail(fullName, amount, date, email, rejected = false) {
 	try {
 		let bodyContent = `
       <td style="padding: 20px; line-height: 1.8;">
         <p>Dear ${fullName}</p>
         <p>
           Your Withdrawal of <strong>${amount}</strong>, 
-          ${date}, was successful! Thanks for choosing Mirrorcaps!
+          ${date}, was ${rejected ? "unsuccessful" : "successful"}! ${rejected ? "Please try again later." : "Thanks for choosing Mirrorcaps!"}
         </p>
         <p>
           If you have questions or need assistance, reach out 

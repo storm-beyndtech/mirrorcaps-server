@@ -132,7 +132,7 @@ router.put("/:id", async (req, res) => {
 		const { fullName, email } = user;
 		const { date } = withdrawal;
 
-		const emailData = await withdrawalMail(fullName, amount, date, email);
+		const emailData = await withdrawalMail(fullName, amount, date, email, status !== "success");
 		if (emailData.error) return res.status(400).send({ message: emailData.error });
 
 		res.send({ message: "Withdrawal successfully updated" });
