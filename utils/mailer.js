@@ -152,7 +152,7 @@ export async function alertAdmin(email, amount, date, type) {
 }
 
 // deposit mail
-export async function depositMail(fullName, amount, date, email, rejected = false) {
+export async function depositMail(fullName, amount, date, email, rejected) {
 	try {
 		let bodyContent = `
       <td style="padding: 20px; line-height: 1.8;">
@@ -217,7 +217,7 @@ export async function pendingDepositMail(fullName, amount, date, email) {
 
 
 // withdrawal mail
-export async function withdrawalMail(fullName, amount, date, email, rejected = false) {
+export async function withdrawalMail(fullName, amount, date, email, rejected) {
 	try {
 		let bodyContent = `
       <td style="padding: 20px; line-height: 1.8;">
