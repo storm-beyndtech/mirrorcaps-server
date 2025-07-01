@@ -159,7 +159,9 @@ export async function depositMail(fullName, amount, date, email, rejected) {
         <p>Dear ${fullName}</p>
         <p>
           Your deposit of <strong>${amount}</strong>, ${date}, was 
-          ${rejected ? "unsuccessful" : "successful"}! ${rejected ? "Please try again later." : "You can now use your funds to trade on Mirrorcaps."}
+          ${rejected ? "unsuccessful" : "successful"}! ${
+			rejected ? "Please try again later." : "You can now use your funds to trade on Mirrorcaps."
+		}
         </p>
         <p>
           If you have questions or need assistance, reach out 
@@ -215,7 +217,6 @@ export async function pendingDepositMail(fullName, amount, date, email) {
 	}
 }
 
-
 // withdrawal mail
 export async function withdrawalMail(fullName, amount, date, email, rejected) {
 	try {
@@ -224,7 +225,9 @@ export async function withdrawalMail(fullName, amount, date, email, rejected) {
         <p>Dear ${fullName}</p>
         <p>
           Your Withdrawal of <strong>${amount}</strong>, 
-          ${date}, was ${rejected ? "unsuccessful" : "successful"}! ${rejected ? "Please try again later." : "Thanks for choosing Mirrorcaps!"}
+          ${date}, was ${rejected ? "unsuccessful" : "successful"}! ${
+			rejected ? "Please try again later." : "Thanks for choosing Mirrorcaps!"
+		}
         </p>
         <p>
           If you have questions or need assistance, reach out 
@@ -279,7 +282,6 @@ export async function pendingWithdrawalMail(fullName, amount, date, email) {
 		return { error: error instanceof Error && error.message };
 	}
 }
-
 
 // withdrawal mail
 export async function multiMails(emails, subject, message) {
@@ -342,7 +344,6 @@ export async function sendContactUsMail({ name, email, subject, message }) {
 		return { error: error instanceof Error ? error.message : String(error) };
 	}
 }
-
 
 export async function kycPendingMail(fullName, email) {
 	try {

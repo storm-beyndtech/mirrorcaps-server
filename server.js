@@ -39,7 +39,7 @@ mongoose
 const allowedOrigins = [
 	"https://mirrorcaps.com",
 	"https://www.mirrorcaps.com",
-	"https://mirrorcaps-client.vercel.app/",
+	"https://mirrorcaps-client.vercel.app",
 	"http://localhost:5173",
 ];
 
@@ -83,7 +83,7 @@ app.use("/api/utils", utilsRoutes);
 app.use("/api/kycs", kycsRoutes);
 
 // Listening to port
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Listening on port ${PORT}`));
 
 app.get("/", (req, res) => {
