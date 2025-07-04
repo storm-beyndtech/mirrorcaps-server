@@ -41,6 +41,7 @@ const allowedOrigins = [
 	"https://www.mirrorcaps.com",
 	"https://mirrorcaps-client.vercel.app",
 	"http://localhost:5173",
+	"http://localhost:3000",
 ];
 
 const corsOptions = {

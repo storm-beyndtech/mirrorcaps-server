@@ -61,32 +61,33 @@ export async function otpMail(userEmail, otp) {
 	try {
 		let bodyContent = `
       <td style="padding: 20px; line-height: 1.8;">
-        <p>Your Verification code is:</p>
-        <p class="otp">${otp}</p>
+        <p>Dear User,</p>
+        <p>Your verification code for Mirrorcaps is:</p>
+        <div style="background-color: #f5f5f5; padding: 15px; text-align: center; margin: 20px 0; border-radius: 5px;">
+          <span style="font-size: 24px; font-weight: bold; color: #333; letter-spacing: 3px;">${otp}</span>
+        </div>
         <p>
-          Copy and paste the above code into the form on the 
-          website to continue. This code expires in 5 minutes.
+          Please enter this code in the verification form to continue. 
+          <strong>This code expires in 5 minutes.</strong>
         </p>
-        <p>
-          If you have questions or need assistance, reach out 
-          to our support team at support@mirrorcaps.com.
-        </p>
-        <p>Best regards</p>
+        <p>If you didn't request this code, please ignore this email.</p>
+        <p>Best regards,</p>
         <p>The Mirrorcaps Team</p>
       </td>
     `;
 
 		let mailOptions = {
-			from: `Mirrorcaps ${process.env.SMTP_USER}`,
+			from: `Mirrorcaps <${process.env.SMTP_USER}>`,
 			to: userEmail,
-			subject: "Otp!",
+			subject: "Mirrorcaps Verification Code",
 			html: emailTemplate(bodyContent),
 		};
 
 		const result = await sendMailWithRetry(mailOptions);
 		return result;
 	} catch (error) {
-		return { error: error instanceof Error && error.message };
+		console.error("OTP email error:", error);
+		return { error: error instanceof Error ? error.message : String(error) };
 	}
 }
 

@@ -10,6 +10,7 @@ import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { googleLogin } from "../utils/googleLoginController.js";
+import { verifyOtp } from "../utils/verifyOtp.js";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -146,16 +147,27 @@ router.post("/signup", async (req, res) => {
 	}
 });
 
-//create a new user
+// verify otp
 router.post("/verify-otp", async (req, res) => {
-	const { username, email, password, referredBy, type } = req.body;
+	const { username, email, password, referredBy, type, otp } = req.body;
+
 	try {
+		// Validate required fields
+		if (!otp) {
+			return res.status(400).send({ message: "OTP is required" });
+		}
+
 		let user = await User.findOne({
 			$or: [{ email }, { username }],
 		});
 
 		if (type === "register-verification") {
 			if (user) return res.status(400).send({ message: "User already exists, please login" });
+
+			const isOTPValid = await verifyOtp(user.email, otp);
+			if (!isOTPValid) {
+				return res.status(400).send({ message: "Invalid or expired OTP" });
+			}
 
 			const salt = await bcrypt.genSalt(10);
 			const hashedPassword = await bcrypt.hash(password, salt);
@@ -169,13 +181,42 @@ router.post("/verify-otp", async (req, res) => {
 
 		if (type === "login-verification") {
 			if (!user) return res.status(400).send({ message: "User not found, please register" });
-			const validPassword = bcrypt.compare(password, user.password);
+
+			// Verify OTP for login
+			const isOTPValid = await verifyOtp(user.email, otp);
+			if (!isOTPValid) {
+				return res.status(400).send({ message: "Invalid or expired OTP" });
+			}
+
+			const validPassword = await bcrypt.compare(password, user.password);
 			if (!validPassword) return res.status(400).send({ message: "Invalid password" });
 
 			return res.send({ user });
 		}
 
-		return res.status(400).send({ message: "Invalid type. Must be 'register' or 'login'" });
+		if (type === "reset-password") {
+			if (!user) return res.status(400).send({ message: "User not found, please register" });
+
+			// Verify OTP for password reset
+			const isOTPValid = await verifyOtp(user.email, otp);
+			if (!isOTPValid) {
+				return res.status(400).send({ message: "Invalid or expired OTP" });
+			}
+
+			// Hash the new password
+			const salt = await bcrypt.genSalt(10);
+			const hashedPassword = await bcrypt.hash(password, salt);
+
+			// Update user's password
+			user.password = hashedPassword;
+			await user.save();
+
+			return res.send({ message: "Password reset successfully", user });
+		}
+
+		return res.status(400).send({
+			message: "Invalid type. Must be 'register-verification', 'login-verification' or 'reset-password'",
+		});
 	} catch (e) {
 		console.error(e);
 		return res.status(500).send({ message: "Server error" });
@@ -219,19 +260,22 @@ router.put("/change-password", async (req, res) => {
 	}
 });
 
-// new password
-router.put("/new-password", async (req, res) => {
-	const { email, password } = req.body;
-	if (!email) return res.status(400).send({ message: "Email is required" });
+// reset password
+router.put("/reset-password", async (req, res) => {
+	const { email, username } = req.body;
+	if (!email && !username) return res.status(400).send({ message: "Email and username are required" });
 
-	let user = await User.findOne({ email });
-	if (!user) return res.status(400).send({ message: "Invalid email" });
+	let user = await User.findOne({
+		$or: [{ email }, { username }],
+	});
+	if (!user) return res.status(400).send({ message: "Invalid email or username" });
 
 	try {
-		const salt = await bcrypt.genSalt(10);
-		user.password = await bcrypt.hash(password, salt);
-		user = await user.save();
-		res.send({ message: "Password changed successfully" });
+		const otp = await new Otp({ email: user.email }).save();
+		const emailData = await otpMail(user.email, otp.code);
+		if (emailData.error) return res.status(400).send({ message: emailData.error });
+
+		res.send({ message: "success" });
 	} catch (error) {
 		return res.status(500).send({ message: "Something Went Wrong..." });
 	}
