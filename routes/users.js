@@ -164,7 +164,7 @@ router.post("/verify-otp", async (req, res) => {
 		if (type === "register-verification") {
 			if (user) return res.status(400).send({ message: "User already exists, please login" });
 
-			const isOTPValid = await verifyOtp(user.email, otp);
+			const isOTPValid = await verifyOtp(email, otp);
 			if (!isOTPValid) {
 				return res.status(400).send({ message: "Invalid or expired OTP" });
 			}
