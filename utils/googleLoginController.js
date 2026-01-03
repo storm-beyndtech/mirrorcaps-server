@@ -1,6 +1,7 @@
 import { OAuth2Client } from "google-auth-library";
 import { welcomeMail } from "./mailer.js";
 import { User } from "../models/user.js";
+import { logActivity } from "./activityLogger.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -36,7 +37,17 @@ export const googleLogin = async (req, res) => {
 			await welcomeMail(user.email);
 		}
 
-		res.json({ user });
+		const token = user.genAuthToken();
+		const safeUser = user.toObject();
+		delete safeUser.password;
+
+		await logActivity(req, {
+			actor: user,
+			action: "user_login",
+			metadata: { via: "google" },
+		});
+
+		res.json({ user: safeUser, token });
 	} catch (error) {
 		console.error(error);
 		res.status(401).json({ message: "Invalid Google token" });

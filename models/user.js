@@ -1,6 +1,7 @@
 import Joi from "joi";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "../utils/jwt.js";
 
 export const userSchema = new mongoose.Schema({
 	title: { type: String, maxLength: 10 },
@@ -148,10 +149,7 @@ export const userSchema = new mongoose.Schema({
 });
 
 userSchema.methods.genAuthToken = function () {
-	return jwt.sign(
-		{ _id: this._id, username: this.username, isAdmin: this.isAdmin },
-		process.env.JWT_PRIVATE_KEY,
-	);
+	return jwt.sign({ _id: this._id, username: this.username, isAdmin: this.isAdmin }, getJwtSecret());
 };
 
 userSchema.pre("save", function (next) {

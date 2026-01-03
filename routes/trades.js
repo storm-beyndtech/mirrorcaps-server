@@ -4,10 +4,20 @@ import { User } from "../models/user.js";
 import mongoose from "mongoose";
 import { DemoTrade } from "../models/DemoTrade.js";
 import { Trader } from "../models/trader.js";
+import { authenticate, requireAdmin } from "../middleware/auth.js";
+import { logActivity } from "../utils/activityLogger.js";
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
+const isSelfOrAdmin = (req, id, email) => {
+	if (!req.user) return false;
+	if (req.user.isAdmin) return true;
+	if (id && req.user._id?.toString() === id?.toString()) return true;
+	if (email && req.user.email === email) return true;
+	return false;
+};
+
+router.get("/", authenticate, requireAdmin, async (req, res) => {
 	try {
 		const trades = await Transaction.find({ type: "trade" }).sort({ date: "asc" });
 		res.send(trades);
@@ -18,7 +28,7 @@ router.get("/", async (req, res) => {
 });
 
 //Get user trades
-router.get("/user/:userId/trader/:traderId", async (req, res) => {
+router.get("/user/:userId/trader/:traderId", authenticate, async (req, res) => {
 	try {
 		const { userId, traderId } = req.params;
 
@@ -35,6 +45,10 @@ router.get("/user/:userId/trader/:traderId", async (req, res) => {
 		const user = await User.findById(userId);
 		if (!user) {
 			return res.status(404).send({ message: "User not found" });
+		}
+
+		if (!isSelfOrAdmin(req, user._id, user.email)) {
+			return res.status(403).send({ message: "Access denied" });
 		}
 
 		// Get trader to access their category
@@ -58,9 +72,12 @@ router.get("/user/:userId/trader/:traderId", async (req, res) => {
 });
 
 // Get all demo trades for a user
-router.get("/demo-trades/:email", async (req, res) => {
+router.get("/demo-trades/:email", authenticate, async (req, res) => {
 	try {
 		const { email } = req.params;
+		if (!isSelfOrAdmin(req, null, email)) {
+			return res.status(403).json({ message: "Access denied" });
+		}
 		const trades = await DemoTrade.find({ email }).sort({ createdAt: -1 });
 
 		res.status(200).json({ trades });
@@ -69,9 +86,12 @@ router.get("/demo-trades/:email", async (req, res) => {
 	}
 });
 
-router.post("/create-demo-trade", async (req, res) => {
+router.post("/create-demo-trade", authenticate, async (req, res) => {
 	try {
 		const { email, symbol, marketDirection, amount, duration, profit } = req.body;
+		if (!isSelfOrAdmin(req, null, email)) {
+			return res.status(403).json({ message: "Access denied" });
+		}
 
 		const newTrade = await DemoTrade.create({
 			email,
@@ -106,7 +126,7 @@ router.post("/create-demo-trade", async (req, res) => {
 });
 
 // making a trade
-router.post("/", async (req, res) => {
+router.post("/", authenticate, requireAdmin, async (req, res) => {
 	const { symbol, interest, category } = req.body;
 
 	try {
@@ -118,6 +138,14 @@ router.post("/", async (req, res) => {
 
 		await trade.save();
 
+		await logActivity(req, {
+			action: "create_trade",
+			actor: req.user,
+			target: { collection: "transactions", id: trade._id },
+			metadata: { symbol, interest, category },
+			notifyAdmin: true,
+		});
+
 		res.status(200).send({ message: "Success" });
 	} catch (error) {
 		for (i in error.errors) res.status(500).send({ message: error.errors[i].message });
@@ -125,7 +153,7 @@ router.post("/", async (req, res) => {
 });
 
 // updating a trade
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticate, requireAdmin, async (req, res) => {
 	const { id } = req.params;
 	const session = await mongoose.startSession();
 	session.startTransaction();
@@ -182,6 +210,14 @@ router.put("/:id", async (req, res) => {
 		await session.commitTransaction();
 		session.endSession();
 
+		await logActivity(req, {
+			action: "update_trade",
+			actor: req.user,
+			target: { collection: "transactions", id: trade._id },
+			metadata: { status: trade.status },
+			notifyAdmin: true,
+		});
+
 		res.send({ message: "Trade successfully updated" });
 	} catch (error) {
 		await session.abortTransaction();
@@ -192,12 +228,19 @@ router.put("/:id", async (req, res) => {
 });
 
 // deleting a trade
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, requireAdmin, async (req, res) => {
 	const { id } = req.params;
 
 	try {
 		const trade = await Transaction.findByIdAndRemove(id);
 		if (!trade) return res.status(404).send({ message: "Trade not found" });
+
+		await logActivity(req, {
+			action: "delete_trade",
+			actor: req.user,
+			target: { collection: "transactions", id },
+			notifyAdmin: true,
+		});
 
 		res.send(trade);
 	} catch (error) {

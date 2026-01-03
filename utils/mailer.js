@@ -17,7 +17,7 @@ const sendMail = (mailData) => {
 	});
 };
 
-const sendMailWithRetry = async (mailData, retries = 3) => {
+export const sendMailWithRetry = async (mailData, retries = 3) => {
 	for (let i = 0; i < retries; i++) {
 		try {
 			return await sendMail(mailData);

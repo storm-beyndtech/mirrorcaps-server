@@ -6,6 +6,8 @@ import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { kycApprovedMail, kycPendingMail } from "../utils/mailer.js";
+import { authenticate, requireAdmin } from "../middleware/auth.js";
+import { logActivity } from "../utils/activityLogger.js";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -29,7 +31,7 @@ export const upload = multer({ storage: storage });
 const router = express.Router();
 
 // getting all kycs
-router.get("/", async (req, res) => {
+router.get("/", authenticate, requireAdmin, async (req, res) => {
 	try {
 		const kycs = await Kyc.find().sort({ _id: -1 });
 		res.send(kycs);
@@ -39,7 +41,7 @@ router.get("/", async (req, res) => {
 });
 
 // getting a kyc
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, requireAdmin, async (req, res) => {
 	const { id } = req.params;
 	try {
 		const kyc = await Kyc.findById(id);
@@ -78,6 +80,13 @@ router.post("/", upload.fields([{ name: "documentFront" }, { name: "documentBack
 		const emailData = await kycPendingMail(name, email);
 		if (emailData.error) return res.status(400).send({ message: emailData.error });
 
+		await logActivity(req, {
+			action: "submit_kyc",
+			actor: null,
+			target: { collection: "kycs", id: result._id },
+			metadata: { email },
+		});
+
 		res.send(result);
 	} catch (e) {
 		console.error(e);
@@ -86,7 +95,7 @@ router.post("/", upload.fields([{ name: "documentFront" }, { name: "documentBack
 });
 
 // approving a kyc
-router.put("/", async (req, res) => {
+router.put("/", authenticate, requireAdmin, async (req, res) => {
 	const { email, kyc } = req.body;
 
 	try {
@@ -110,6 +119,14 @@ router.put("/", async (req, res) => {
 
 		const emailData = await kycApprovedMail(user.fullName, email);
     if (emailData.error) return res.status(400).send({ message: emailData.error });
+
+		await logActivity(req, {
+			action: "approve_kyc",
+			actor: req.user,
+			target: { collection: "kycs", id: userKyc._id },
+			metadata: { userId: user._id },
+			notifyAdmin: true,
+		});
     
 		res.send({ message: "KYC approved and user updated successfully." });
 	} catch (e) {

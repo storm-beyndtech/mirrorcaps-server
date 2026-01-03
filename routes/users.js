@@ -11,6 +11,8 @@ import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { googleLogin } from "../utils/googleLoginController.js";
 import { verifyOtp } from "../utils/verifyOtp.js";
+import { authenticate, requireAdmin } from "../middleware/auth.js";
+import { logActivity } from "../utils/activityLogger.js";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -33,6 +35,14 @@ export const upload = multer({ storage: storage });
 
 const router = express.Router();
 
+const isSelfOrAdmin = (req, userId, email) => {
+	if (!req.user) return false;
+	if (req.user.isAdmin) return true;
+	if (userId && req.user._id?.toString() === userId?.toString()) return true;
+	if (email && req.user.email === email) return true;
+	return false;
+};
+
 //Get QR Code For 2FA
 router.get("/getQrcode", async (req, res) => {
 	const secret = speakeasy.generateSecret({ name: "ameritrades" });
@@ -43,10 +53,13 @@ router.get("/getQrcode", async (req, res) => {
 });
 
 // GET /referrals/:username
-router.get("/referrals/:username", async (req, res) => {
+router.get("/referrals/:username", authenticate, async (req, res) => {
 	const { username } = req.params;
 
 	try {
+		if (!isSelfOrAdmin(req, null, null) && req.user.username !== username && !req.user.isAdmin) {
+			return res.status(403).json({ message: "Forbidden" });
+		}
 		// Find all users referred by the given username
 		const referrals = await User.find({ referredBy: username }).select("username createdAt");
 
@@ -62,10 +75,13 @@ router.get("/referrals/:username", async (req, res) => {
 	}
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
 	try {
 		let user = await User.findById(req.params.id);
 		if (!user) return res.status(400).send({ message: "user not found" });
+		if (!isSelfOrAdmin(req, req.params.id, user.email)) {
+			return res.status(403).send({ message: "Access denied" });
+		}
 		res.send({ user });
 	} catch (x) {
 		return res.status(500).send({ message: "Something Went Wrong..." });
@@ -73,7 +89,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Getting all users sorted by creation date (newest first)
-router.get("/", async (req, res) => {
+router.get("/", authenticate, requireAdmin, async (req, res) => {
 	try {
 		const users = await User.find().sort({ createdAt: -1 });
 		res.send(users);
@@ -116,7 +132,18 @@ router.post("/login", async (req, res) => {
 		const isMatch = await bcrypt.compare(password, user.password);
 		if (!isMatch) return res.status(400).send({ message: "Invalid password" });
 
-		res.send({ message: "success", user });
+		const token = user.genAuthToken();
+		const safeUser = user.toObject();
+		delete safeUser.password;
+
+		await logActivity(req, {
+			actor: user,
+			action: user.isAdmin ? "admin_login" : "user_login",
+			metadata: { via: "password", requires2FA: !!user.mfa },
+			notifyAdmin: !!user.isAdmin,
+		});
+
+		res.send({ message: "success", user: safeUser, token });
 	} catch (e) {
 		console.error(e);
 		res.status(500).send({ message: "Internal server error" });
@@ -176,7 +203,17 @@ router.post("/verify-otp", async (req, res) => {
 			await user.save();
 
 			await welcomeMail(user.email);
-			return res.send({ user });
+			const token = user.genAuthToken();
+			const safeUser = user.toObject();
+			delete safeUser.password;
+
+			await logActivity(req, {
+				actor: user,
+				action: "user_register",
+				metadata: { via: "email" },
+			});
+
+			return res.send({ user: safeUser, token });
 		}
 
 		if (type === "login-verification") {
@@ -191,7 +228,18 @@ router.post("/verify-otp", async (req, res) => {
 			const validPassword = await bcrypt.compare(password, user.password);
 			if (!validPassword) return res.status(400).send({ message: "Invalid password" });
 
-			return res.send({ user });
+			const token = user.genAuthToken();
+			const safeUser = user.toObject();
+			delete safeUser.password;
+
+			await logActivity(req, {
+				actor: user,
+				action: user.isAdmin ? "admin_login" : "user_login",
+				metadata: { via: "otp" },
+				notifyAdmin: !!user.isAdmin,
+			});
+
+			return res.send({ user: safeUser, token });
 		}
 
 		if (type === "reset-password") {
@@ -211,7 +259,17 @@ router.post("/verify-otp", async (req, res) => {
 			user.password = hashedPassword;
 			await user.save();
 
-			return res.send({ message: "Password reset successfully", user });
+			const token = user.genAuthToken();
+			const safeUser = user.toObject();
+			delete safeUser.password;
+
+			await logActivity(req, {
+				actor: user,
+				action: "reset_password",
+				target: { collection: "users", id: user._id },
+			});
+
+			return res.send({ message: "Password reset successfully", user: safeUser, token });
 		}
 
 		return res.status(400).send({
@@ -239,12 +297,16 @@ router.post("/resend-otp", async (req, res) => {
 });
 
 //Change password
-router.put("/change-password", async (req, res) => {
+router.put("/change-password", authenticate, async (req, res) => {
 	const { currentPassword, newPassword, id } = req.body;
+	const userId = id || req.user?._id;
 
 	try {
-		const user = await User.findById(id);
+		const user = await User.findById(userId);
 		if (!user) return res.status(404).send({ message: "User not found" });
+		if (!isSelfOrAdmin(req, user._id, user.email)) {
+			return res.status(403).send({ message: "Access denied" });
+		}
 
 		const validPassword = await bcrypt.compare(currentPassword, user.password);
 		if (!validPassword) return res.status(400).send({ message: "Current password is incorrect" });
@@ -252,6 +314,12 @@ router.put("/change-password", async (req, res) => {
 		const salt = await bcrypt.genSalt(10);
 		user.password = await bcrypt.hash(newPassword, salt);
 		await user.save();
+
+		await logActivity(req, {
+			action: "change_password",
+			actor: req.user,
+			target: { collection: "users", id: user._id },
+		});
 
 		res.send({ message: "Password changed successfully" });
 	} catch (err) {
@@ -281,11 +349,14 @@ router.put("/reset-password", async (req, res) => {
 	}
 });
 
-router.put("/update-profile", upload.single("profileImage"), async (req, res) => {
+router.put("/update-profile", authenticate, upload.single("profileImage"), async (req, res) => {
 	const { email, ...rest } = req.body;
 
 	let user = await User.findOne({ email });
 	if (!user) return res.status(404).send({ message: "User not found" });
+	if (!isSelfOrAdmin(req, user._id, email)) {
+		return res.status(403).send({ message: "Access denied" });
+	}
 
 	try {
 		if (req.file) {
@@ -294,6 +365,14 @@ router.put("/update-profile", upload.single("profileImage"), async (req, res) =>
 
 		user.set(rest);
 		user = await user.save();
+
+		await logActivity(req, {
+			action: "update_profile",
+			actor: req.user,
+			target: { collection: "users", id: user._id },
+			metadata: { updated: Object.keys(rest) },
+			notifyAdmin: !!req.user?.isAdmin && req.user._id?.toString() !== user._id?.toString(),
+		});
 
 		res.send({ user });
 	} catch (e) {
@@ -304,7 +383,7 @@ router.put("/update-profile", upload.single("profileImage"), async (req, res) =>
 });
 
 //Delete multi users
-router.delete("/", async (req, res) => {
+router.delete("/", authenticate, requireAdmin, async (req, res) => {
 	const { userIds, usernamePrefix, emailPrefix } = req.body;
 
 	// Build the filter dynamically
@@ -332,6 +411,13 @@ router.delete("/", async (req, res) => {
 
 	try {
 		const result = await User.deleteMany(filter);
+		await logActivity(req, {
+			action: "bulk_delete_users",
+			actor: req.user,
+			target: { collection: "users" },
+			metadata: { userIds, usernamePrefix, emailPrefix, deletedCount: result.deletedCount },
+			notifyAdmin: true,
+		});
 		res.json({ success: true, deletedCount: result.deletedCount });
 	} catch (error) {
 		console.error(error);
@@ -340,15 +426,27 @@ router.delete("/", async (req, res) => {
 });
 
 // PUT /api/user/
-router.put("/update-user-trader", async (req, res) => {
+router.put("/update-user-trader", authenticate, async (req, res) => {
 	try {
 		const { traderId, action, userId } = req.body;
 
 		if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
+		if (!isSelfOrAdmin(req, userId)) {
+			return res.status(403).json({ message: "Access denied" });
+		}
+
 		const update = action === "copy" ? { traderId } : { $unset: { traderId: 1 } };
 
 		const updatedUser = await User.findByIdAndUpdate(userId, update, { new: true });
+
+		await logActivity(req, {
+			action: action === "copy" ? "link_trader" : "unlink_trader",
+			actor: req.user,
+			target: { collection: "users", id: userId },
+			metadata: { traderId },
+			notifyAdmin: !!req.user?.isAdmin,
+		});
 
 		return res.status(200).json({
 			message: action === "copy" ? "Trader copied" : "Trader uncopied",
@@ -361,11 +459,14 @@ router.put("/update-user-trader", async (req, res) => {
 });
 
 // Veryify 2FA for user
-router.post("/verifyToken", async (req, res) => {
+router.post("/verifyToken", authenticate, async (req, res) => {
 	const { token, secret, email } = req.body;
 
 	let user = await User.findOne({ email });
 	if (!user) return res.status(400).send({ message: "Invalid email" });
+	if (!isSelfOrAdmin(req, user._id, email)) {
+		return res.status(403).send({ message: "Access denied" });
+	}
 
 	try {
 		const verify = speakeasy.totp.verify({

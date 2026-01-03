@@ -4,6 +4,8 @@ import { Trader } from "../models/trader.js";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
+import { authenticate, requireAdmin } from "../middleware/auth.js";
+import { logActivity } from "../utils/activityLogger.js";
 
 // Configure Cloudinary
 cloudinary.config({
@@ -28,7 +30,7 @@ const upload = multer({ storage: storage });
  * @route   GET /api/admin
  * @desc    Get all traders (admin only)
  */
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
 	try {
 		const traders = await Trader.find();
 
@@ -44,7 +46,7 @@ router.get("/", async (req, res) => {
  * @route   GET /api/admin/:id
  * @desc    Get trader by ID (admin only)
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
 	try {
 		const trader = await Trader.findById(req.params.id);
 
@@ -66,7 +68,7 @@ router.get("/:id", async (req, res) => {
  * @route   POST /api/admin/create
  * @desc    Create a new trader with profile image (admin only)
  */
-router.post("/create", upload.single("profileImage"), async (req, res) => {
+router.post("/create", authenticate, requireAdmin, upload.single("profileImage"), async (req, res) => {
 	try {
 		const traderData = JSON.parse(req.body.traderData);
 
@@ -76,6 +78,14 @@ router.post("/create", upload.single("profileImage"), async (req, res) => {
 		}
 
 		const newTrader = await Trader.create(traderData);
+
+		await logActivity(req, {
+			action: "create_trader",
+			actor: req.user,
+			target: { collection: "traders", id: newTrader._id },
+			metadata: { name: traderData.name },
+			notifyAdmin: true,
+		});
 
 		res.status(201).json({ message: "Trader Created Successfully", newTrader });
 	} catch (error) {
@@ -96,7 +106,7 @@ router.post("/create", upload.single("profileImage"), async (req, res) => {
  * @route   PUT /api/admin/:id
  * @desc    Update a trader with profile image (admin only)
  */
-router.put("/:id", upload.single("profileImage"), async (req, res) => {
+router.put("/:id", authenticate, requireAdmin, upload.single("profileImage"), async (req, res) => {
 	try {
 		const traderData = JSON.parse(req.body.traderData);
 
@@ -117,6 +127,13 @@ router.put("/:id", upload.single("profileImage"), async (req, res) => {
 		}
 
 		res.status(200).json({ message: "Trader Updated Successfully", trader });
+		await logActivity(req, {
+			action: "update_trader",
+			actor: req.user,
+			target: { collection: "traders", id: trader._id },
+			metadata: { name: traderData.name },
+			notifyAdmin: true,
+		});
 	} catch (error) {
 		if (error.name === "ValidationError") {
 			const messages = Object.values(error.errors).map((val) => val.message);
@@ -135,7 +152,7 @@ router.put("/:id", upload.single("profileImage"), async (req, res) => {
  * @route   DELETE /api/admin/:id
  * @desc    Delete a trader (admin only)
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, requireAdmin, async (req, res) => {
 	try {
 		const trader = await Trader.findByIdAndDelete(req.params.id);
 
@@ -144,6 +161,13 @@ router.delete("/:id", async (req, res) => {
 				message: "Trader not found",
 			});
 		}
+
+		await logActivity(req, {
+			action: "delete_trader",
+			actor: req.user,
+			target: { collection: "traders", id: trader._id },
+			notifyAdmin: true,
+		});
 
 		res.status(204).json({ message: "Trader Deleted Successfully" });
 	} catch (error) {

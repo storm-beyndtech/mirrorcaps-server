@@ -1,6 +1,8 @@
 import express from "express";
 import { Util } from "../models/util.js";
 import { multiMails, sendContactUsMail } from "../utils/mailer.js";
+import { authenticate, requireAdmin } from "../middleware/auth.js";
+import { logActivity } from "../utils/activityLogger.js";
 
 const router = express.Router();
 
@@ -15,7 +17,7 @@ router.get("/", async (req, res) => {
 });
 
 // updating a util
-router.put("/update/:id", async (req, res) => {
+router.put("/update/:id", authenticate, requireAdmin, async (req, res) => {
 	const { id } = req.params;
 
 	try {
@@ -32,6 +34,14 @@ router.put("/update/:id", async (req, res) => {
 
 		if (!util) return res.status(404).send("Util not found");
 
+		await logActivity(req, {
+			action: "update_util",
+			actor: req.user,
+			target: { collection: "utils", id },
+			metadata: req.body,
+			notifyAdmin: true,
+		});
+
 		res.status(200).send(util);
 	} catch (error) {
 		for (i in error.errors) res.status(500).send(error.errors[i].message);
@@ -39,12 +49,19 @@ router.put("/update/:id", async (req, res) => {
 });
 
 // deleting a util
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, requireAdmin, async (req, res) => {
 	const { id } = req.params;
 
 	try {
 		const util = await Util.findByIdAndRemove(id);
 		if (!util) return res.status(404).send("Util not found");
+
+		await logActivity(req, {
+			action: "delete_util",
+			actor: req.user,
+			target: { collection: "utils", id },
+			notifyAdmin: true,
+		});
 
 		res.status(200).send(util);
 	} catch (error) {
@@ -53,7 +70,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 // POST route to send mail
-router.post("/send-mail", async (req, res) => {
+router.post("/send-mail", authenticate, requireAdmin, async (req, res) => {
 	const { emails, subject, message } = req.body;
 
 	if (!emails || !Array.isArray(emails) || emails.length === 0) {
@@ -67,6 +84,14 @@ router.post("/send-mail", async (req, res) => {
 	try {
 		const emailData = await multiMails(emails, subject, message);
 		if (emailData.error) return res.status(400).send({ message: emailData.error });
+
+		await logActivity(req, {
+			action: "send_mail",
+			actor: req.user,
+			target: { collection: "utils" },
+			metadata: { emails, subject },
+			notifyAdmin: true,
+		});
 
 		res.status(200).json({
 			message: "Emails sent successfully",
